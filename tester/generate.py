@@ -19,7 +19,9 @@ def build_item(index, match, fmt, args):
             "context": {"before": args.before, "after": args.after},
         },
     }
-    if fmt == "file":
+    if fmt == "net":
+        item["data"]["url"] = args.url
+    elif fmt == "file":
         item["data"].update({"file": args.file_path, "line": args.line + index, "column": args.column})
     return item
 
@@ -33,6 +35,7 @@ def main():
     parser.add_argument("--group", default="Default")
     parser.add_argument("--before", default="")
     parser.add_argument("--after", default="")
+    parser.add_argument("--url", default="https://example.com/api")
     parser.add_argument("--file-path", default="/path/to/File.java")
     parser.add_argument("--line", type=int, default=1)
     parser.add_argument("--column", type=int, default=1)

@@ -33,6 +33,7 @@ HaE Validator 是一个社区维护的 [HaE](https://github.com/gh0stkey/HaE) �
     {
       "index": 0,
       "data": {
+        "url": "https://example.com/api",
         "match": "匹配内容",
         "context": {
           "before": "匹配内容前50个字符串",
@@ -90,6 +91,7 @@ HaE Validator 是一个社区维护的 [HaE](https://github.com/gh0stkey/HaE) �
 | `rule.regex` | 规则的正则表达式 |
 | `rule.group` | 规则所属分组 |
 | `items[].index` | 匹配项的索引 |
+| `items[].data.url` | *（仅 HaENet）* 匹配所在的 URL |
 | `items[].data.match` | 匹配到的内容 |
 | `items[].data.file` | *（仅 HaEFile）* 匹配所在的源文件路径 |
 | `items[].data.line` | *（仅 HaEFile）* 匹配所在的行号 |

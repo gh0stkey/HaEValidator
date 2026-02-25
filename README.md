@@ -33,6 +33,7 @@ Validators communicate with HaE via **stdin/stdout** using JSON:
     {
       "index": 0,
       "data": {
+        "url": "https://example.com/api",
         "match": "matched_content",
         "context": {
           "before": "50 characters before the match",
@@ -90,6 +91,7 @@ Validators communicate with HaE via **stdin/stdout** using JSON:
 | `rule.regex` | The regular expression of the rule |
 | `rule.group` | The group the rule belongs to |
 | `items[].index` | The index of the matched item |
+| `items[].data.url` | *(HaENet only)* The URL where the match was found |
 | `items[].data.match` | The matched content |
 | `items[].data.file` | *(HaEFile only)* Source file path where the match was found |
 | `items[].data.line` | *(HaEFile only)* Line number of the match |
