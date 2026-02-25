@@ -1,6 +1,6 @@
 <div align="center">
 <h3>HaE Validator</h3>
-<h5>Author: <a href="https://github.com/gh0stkey">EvilChen</a>（Mystery Security Team）</h5>
+<h5>Author: <a href="https://github.com/gh0stkey">EvilChen</a></h5>
 </div>
 
 README Version: \[[English](README.md) | [简体中文](README_CN.md)\]
