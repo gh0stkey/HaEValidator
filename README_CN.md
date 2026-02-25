@@ -98,6 +98,25 @@ HaE Validator 是一个社区维护的 [HaE](https://github.com/gh0stkey/HaE) �
 | `results[].index` | 与输入项的 index 对应 |
 | `results[].tags` | 严重程度等级：`high`、`medium`、`low` 或 `none` |
 
+## 验证器列表
+
+| 名称 | 说明 |
+|------|------|
+| [ChineseIDCard](validator/ChineseIDCard.py) | 中国身份证号码验证（校验位、省份、出生日期） |
+| [OSSAccessKey](validator/OSSAccessKey.py) | 阿里云 OSS AccessKey 交叉验证（AK/SK 配对登录） |
+
+## 测试工具
+
+`tester/` 目录提供了测试数据生成器，用于在本地验证 validator 是否正常工作。
+
+```bash
+# 生成 HaENet 格式测试数据并管道给 validator
+python3 tester/generate.py net ChineseIDCard 110101199003071234 | python3 validator/ChineseIDCard.py
+
+# 生成 HaEFile 格式测试数据
+python3 tester/generate.py file OSSAccessKey '"accessKeyId":"LTAI5tXXX"' '"accessKeySecret":"XXX"' | python3 validator/OSSAccessKey.py
+```
+
 ## 使用方法
 
 1. 选择或编写一个验证器脚本（如 Python）

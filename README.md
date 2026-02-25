@@ -98,6 +98,25 @@ Validators communicate with HaE via **stdin/stdout** using JSON:
 | `results[].index` | Corresponds to the input item's index |
 | `results[].tags` | Severity level: `high`, `medium`, `low`, or `none` |
 
+## Validators
+
+| Name | Description |
+|------|-------------|
+| [ChineseIDCard](validator/ChineseIDCard.py) | Validates Chinese ID card numbers (checksum, province, date of birth) |
+| [OSSAccessKey](validator/OSSAccessKey.py) | Cross-validates Alibaba Cloud OSS AccessKey pairs (AK/SK) via API login |
+
+## Tester
+
+A test data generator is provided in the `tester/` directory to help verify validators locally.
+
+```bash
+# Generate HaENet format test data and pipe to a validator
+python3 tester/generate.py net ChineseIDCard 110101199003071234 | python3 validator/ChineseIDCard.py
+
+# Generate HaEFile format test data
+python3 tester/generate.py file OSSAccessKey '"accessKeyId":"LTAI5tXXX"' '"accessKeySecret":"XXX"' | python3 validator/OSSAccessKey.py
+```
+
 ## Usage
 
 1. Choose or write a validator script (e.g., Python)
