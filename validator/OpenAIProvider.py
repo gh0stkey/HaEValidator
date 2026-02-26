@@ -83,7 +83,7 @@ def main():
     items = input_data.get("items", [])
 
     client = OpenAI(
-        api_key="lm-studio",
+        api_key="", # 修改API Key
         base_url="http://localhost:1234/v1",
     )
 
