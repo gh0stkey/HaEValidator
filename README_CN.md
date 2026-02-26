@@ -105,7 +105,8 @@ HaE Validator 是一个社区维护的 [HaE](https://github.com/gh0stkey/HaE) �
 | 名称 | 说明 |
 |------|------|
 | [ChineseIDCard](validator/ChineseIDCard.py) | 中国身份证号码验证（校验位、省份、出生日期） |
-| [OSSAccessKey](validator/OSSAccessKey.py) | 阿里云 OSS AccessKey 交叉验证（AK/SK 配对登录） |
+| [OSSAccessKey](validator/OSSAccessKey.py) | 阿里云 OSS AccessKey 交叉验证（AK/SK 配对验证） |
+| [OpenAIProvider](validator/OpenAIProvider.py) | 基于 OpenAI 兼容 API 的 AI 智能敏感数据研判 |
 
 ## 测试工具
 

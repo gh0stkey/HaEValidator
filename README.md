@@ -105,7 +105,8 @@ Validators communicate with HaE via **stdin/stdout** using JSON:
 | Name | Description |
 |------|-------------|
 | [ChineseIDCard](validator/ChineseIDCard.py) | Validates Chinese ID card numbers (checksum, province, date of birth) |
-| [OSSAccessKey](validator/OSSAccessKey.py) | Cross-validates Alibaba Cloud OSS AccessKey pairs (AK/SK) via API login |
+| [OSSAccessKey](validator/OSSAccessKey.py) | Cross-validates Alibaba Cloud OSS AccessKey pairs (AK/SK) via API |
+| [OpenAIProvider](validator/OpenAIProvider.py) | AI-powered sensitive data analysis using OpenAI-compatible API |
 
 ## Tester
 
