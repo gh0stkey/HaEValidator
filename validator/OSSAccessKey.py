@@ -1,16 +1,18 @@
+import base64
+import hashlib
+import hmac
 import json
 import re
 import sys
-import hmac
-import hashlib
-import base64
 from datetime import datetime, timezone
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 KV_PATTERN = re.compile(r'"([^"]*?)"\s*[:\uff1a]\s*"([^"]*?)"')
 AK_KEYS = re.compile(r"access.?key.?id|aki|ak_id", re.IGNORECASE)
-SK_KEYS = re.compile(r"access.?key.?secret|secret.?key|aki_secret|ak_secret|\bsk\b", re.IGNORECASE)
+SK_KEYS = re.compile(
+    r"access.?key.?secret|secret.?key|aki_secret|ak_secret|\bsk\b", re.IGNORECASE
+)
 OSS_ENDPOINT = "https://oss-cn-hangzhou.aliyuncs.com"
 INVALID_ERRORS = ("InvalidAccessKeyId", "SignatureDoesNotMatch")
 
@@ -68,7 +70,10 @@ def main():
                 valid.add(si)
 
     results = [
-        {"index": item.get("index", 0), "tags": "high" if item.get("index", 0) in valid else "none"}
+        {
+            "index": item.get("index", 0),
+            "tags": "high" if item.get("index", 0) in valid else "none",
+        }
         for item in items
     ]
     print(json.dumps({"results": results}))

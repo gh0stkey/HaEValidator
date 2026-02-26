@@ -109,15 +109,43 @@ HaE Validator 是一个社区维护的 [HaE](https://github.com/gh0stkey/HaE) �
 
 ## 测试工具
 
-`tester/` 目录提供了测试数据生成器，用于在本地验证 validator 是否正常工作。
+`tester/` 目录提供了测试运行器，用于在本地验证 validator 是否正常工作。支持生成测试数据、自动运行验证器、性能基准测试等功能。
+
+### 基本用法
 
 ```bash
-# 生成 HaENet 格式测试数据并管道给 validator
-python3 tester/generate.py net ChineseIDCard 110101199003071234 | python3 validator/ChineseIDCard.py
+# 仅生成测试数据（管道模式）
+python3 tester/runner.py net ChineseIDCard 110101199003071234 | python3 validator/ChineseIDCard.py
 
-# 生成 HaEFile 格式测试数据
-python3 tester/generate.py file OSSAccessKey '"accessKeyId":"LTAI5tXXX"' '"accessKeySecret":"XXX"' | python3 validator/OSSAccessKey.py
+# 使用 -v 参数自动调用验证器
+python3 tester/runner.py net ChineseIDCard 110101199001011237 -v validator/ChineseIDCard.py
 ```
+
+### 验证期望结果
+
+```bash
+# 使用 -e 参数验证结果是否符合预期
+python3 tester/runner.py net ChineseIDCard 110101199001011237 123456789012345678 \
+    -v validator/ChineseIDCard.py -e high none
+```
+
+### 性能基准测试
+
+```bash
+# 使用 -n 参数运行多次并统计性能
+python3 tester/runner.py net ChineseIDCard 110101199001011237 \
+    -v validator/ChineseIDCard.py -n 10
+```
+
+### 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `-v, --validator PATH` | 验证器脚本路径 |
+| `-e, --expected TAG...` | 期望的标签结果，用于验证 |
+| `-n, --runs N` | 运行次数，用于性能基准测试（默认: 1）|
+| `-t, --timeout SEC` | 验证器超时时间，单位秒（默认: 60）|
+| `--json` | 以 JSON 格式输出结果 |
 
 ## 使用方法
 

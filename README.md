@@ -109,15 +109,43 @@ Validators communicate with HaE via **stdin/stdout** using JSON:
 
 ## Tester
 
-A test data generator is provided in the `tester/` directory to help verify validators locally.
+A test runner is provided in the `tester/` directory to help verify validators locally. It supports generating test data, running validators automatically, and benchmarking performance.
+
+### Basic Usage
 
 ```bash
-# Generate HaENet format test data and pipe to a validator
-python3 tester/generate.py net ChineseIDCard 110101199003071234 | python3 validator/ChineseIDCard.py
+# Generate test data only (pipe mode)
+python3 tester/runner.py net ChineseIDCard 110101199003071234 | python3 validator/ChineseIDCard.py
 
-# Generate HaEFile format test data
-python3 tester/generate.py file OSSAccessKey '"accessKeyId":"LTAI5tXXX"' '"accessKeySecret":"XXX"' | python3 validator/OSSAccessKey.py
+# Auto-run validator with -v option
+python3 tester/runner.py net ChineseIDCard 110101199001011237 -v validator/ChineseIDCard.py
 ```
+
+### Verify Expected Results
+
+```bash
+# Validate results against expected tags (-e option)
+python3 tester/runner.py net ChineseIDCard 110101199001011237 123456789012345678 \
+    -v validator/ChineseIDCard.py -e high none
+```
+
+### Benchmark Performance
+
+```bash
+# Run 10 times and show statistics (-n option)
+python3 tester/runner.py net ChineseIDCard 110101199001011237 \
+    -v validator/ChineseIDCard.py -n 10
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-v, --validator PATH` | Path to validator script |
+| `-e, --expected TAG...` | Expected tags for verification |
+| `-n, --runs N` | Number of runs for benchmarking (default: 1) |
+| `-t, --timeout SEC` | Validator timeout in seconds (default: 60) |
+| `--json` | Output results in JSON format |
 
 ## Usage
 
