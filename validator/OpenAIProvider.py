@@ -50,7 +50,6 @@ def build_content(rule, items):
 
 def parse_response(text, items):
     # 提取返回文本中的JSON数组
-    print(text)
     start = text.find("[")
     end = text.rfind("]")
     if start != -1 and end != -1:
@@ -83,7 +82,7 @@ def main():
     items = input_data.get("items", [])
 
     client = OpenAI(
-        api_key="", # 修改API Key
+        api_key="",  # 修改API Key
         base_url="http://localhost:1234/v1",
     )
 
