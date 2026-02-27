@@ -5,6 +5,7 @@ import smtplib
 import socket
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 STATIC_EXTS = {
     "3g2",
@@ -144,7 +145,7 @@ def get_mx_host(domain):
             ["nslookup", "-type=mx", domain],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=3,
         ).stdout
         for line in out.split("\n"):
             if "mail exchanger" in line.lower():
@@ -169,9 +170,9 @@ def verify_smtp(email, mx_host):
     for port in [25, 587, 465]:
         try:
             if port == 465:
-                smtp = smtplib.SMTP_SSL(mx_host, port, timeout=10)
+                smtp = smtplib.SMTP_SSL(mx_host, port, timeout=4)
             else:
-                smtp = smtplib.SMTP(mx_host, port, timeout=10)
+                smtp = smtplib.SMTP(mx_host, port, timeout=4)
                 if port == 587:
                     try:
                         smtp.starttls()
@@ -209,13 +210,21 @@ def validate(email):
 
 def main():
     data = json.load(sys.stdin)
-    results = [
-        {
+    items = data.get("items", [])
+
+    def process_item(item):
+        return {
             "index": item.get("index", 0),
             "tags": validate(item.get("data", {}).get("match", "")),
         }
-        for item in data.get("items", [])
-    ]
+
+    with ThreadPoolExecutor(max_workers=min(10, len(items) or 1)) as executor:
+        futures = {executor.submit(process_item, item): item for item in items}
+        results = []
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    results.sort(key=lambda x: x["index"])
     print(json.dumps({"results": results}))
 
 
