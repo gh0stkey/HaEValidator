@@ -22,9 +22,15 @@ import json
 import subprocess
 import sys
 import time
+import unicodedata
+
+# ---------------------------------------------------------------------------
+# 数据构建
+# ---------------------------------------------------------------------------
 
 
 def build_item(index, match, fmt, args):
+    """构建单个测试条目"""
     item = {
         "index": index,
         "data": {
@@ -41,8 +47,23 @@ def build_item(index, match, fmt, args):
     return item
 
 
+def build_test_data(args):
+    """根据命令行参数构建完整的测试数据"""
+    return {
+        "rule": {"name": args.rule_name, "regex": args.regex, "group": args.group},
+        "items": [
+            build_item(i, m, args.format, args) for i, m in enumerate(args.matches)
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 验证器执行
+# ---------------------------------------------------------------------------
+
+
 def run_validator(validator_path, input_data, timeout=60):
-    """运行验证器脚本并返回结果"""
+    """运行验证器脚本并返回 (output, error)"""
     try:
         proc = subprocess.run(
             [sys.executable, validator_path],
@@ -62,73 +83,188 @@ def run_validator(validator_path, input_data, timeout=60):
         return None, str(e)
 
 
+def run_benchmark(validator_path, data, runs, timeout):
+    """多次运行验证器，返回 (最后一次输出, 耗时列表 ms)"""
+    durations = []
+    last_output = None
+
+    for i in range(runs):
+        start = time.perf_counter()
+        output, error = run_validator(validator_path, data, timeout=timeout)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        if error:
+            print(f"错误: {error}", file=sys.stderr)
+            sys.exit(1)
+
+        durations.append(elapsed_ms)
+        last_output = output
+
+        if runs > 1:
+            print(f"\r运行进度: {i + 1}/{runs}", end="", flush=True)
+
+    if runs > 1:
+        print()
+
+    return last_output, durations
+
+
+# ---------------------------------------------------------------------------
+# 结果校验（统一逻辑，消除 text / json 两条路径的重复）
+# ---------------------------------------------------------------------------
+
+
+def check_expected(results, items, expected):
+    """对比实际结果与期望，返回 (详情列表, 是否全部通过)
+
+    详情列表每项:
+        {"index", "match", "actual", "expected", "passed"}
+    """
+    details = []
+    all_pass = True
+
+    for result in results:
+        idx = result.get("index", 0)
+        actual = result.get("tags", "N/A")
+        match = items[idx]["data"]["match"] if idx < len(items) else "N/A"
+        exp = expected[idx] if expected and idx < len(expected) else None
+        passed = (actual == exp) if exp is not None else None
+
+        if passed is False:
+            all_pass = False
+
+        details.append(
+            {
+                "index": idx,
+                "match": match,
+                "actual": actual,
+                "expected": exp,
+                "passed": passed,
+            }
+        )
+
+    return details, all_pass
+
+
+# ---------------------------------------------------------------------------
+# 输出格式化
+# ---------------------------------------------------------------------------
+
+
+def display_width(s):
+    """计算字符串在终端中的显示宽度（CJK 字符占 2 列）"""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("F", "W") else 1 for ch in s)
+
+
+def pad(s, width):
+    """按显示宽度右填充空格对齐"""
+    return s + " " * max(0, width - display_width(s))
+
+
 def format_duration(ms):
     """格式化时间显示"""
     if ms < 1:
-        return f"{ms * 1000:.2f}μs"
+        return f"{ms * 1000:.2f}\u03bcs"
     if ms < 1000:
         return f"{ms:.2f}ms"
     return f"{ms / 1000:.2f}s"
 
 
-def print_results(input_data, output, duration_ms, expected=None):
-    """打印测试结果"""
+def output_text(data, output, durations, expected=None):
+    """文本格式输出，返回 all_pass"""
+    rule = data["rule"]
+    details, all_pass = check_expected(
+        output.get("results", []), data["items"], expected
+    )
+
     print("\n" + "=" * 60)
     print("测试结果")
     print("=" * 60)
+    print(f"\n规则: {rule['name']} [{rule['group']}]")
+    print(f"正则: {rule['regex']}")
+    print(f"耗时: {format_duration(durations[0])}")
 
-    rule = input_data.get("rule", {})
-    print(f"\n规则: {rule.get('name', 'N/A')} [{rule.get('group', 'N/A')}]")
-    print(f"正则: {rule.get('regex', 'N/A')}")
-    print(f"耗时: {format_duration(duration_ms)}")
+    # 逐项结果表格
+    cols = (6, 30, 10, 10, 6)
+    header = (
+        pad("序号", cols[0])
+        + pad("匹配内容", cols[1])
+        + pad("结果", cols[2])
+        + pad("期望", cols[3])
+        + pad("状态", cols[4])
+    )
+    total_width = sum(cols)
+    print(f"\n{header}")
+    print("-" * total_width)
 
-    results = output.get("results", [])
-    items = input_data.get("items", [])
-
-    print(f"\n{'序号':<6}{'匹配内容':<30}{'结果':<10}{'期望':<10}{'状态':<6}")
-    print("-" * 60)
-
-    all_pass = True
-    for i, result in enumerate(results):
-        idx = result.get("index", i)
-        tags = result.get("tags", "N/A")
-        match_text = items[idx]["data"]["match"] if idx < len(items) else "N/A"
-        if len(match_text) > 26:
-            match_text = match_text[:26] + "..."
-
-        exp = expected[idx] if expected and idx < len(expected) else "-"
-        if expected and idx < len(expected):
-            status = "✓" if tags == expected[idx] else "✗"
-            if tags != expected[idx]:
-                all_pass = False
-        else:
-            status = "-"
-
-        print(f"{idx:<6}{match_text:<30}{tags:<10}{exp:<10}{status:<6}")
+    for d in details:
+        match_text = d["match"]
+        if display_width(match_text) > cols[1] - 4:
+            while display_width(match_text + "...") > cols[1] - 1:
+                match_text = match_text[:-1]
+            match_text += "..."
+        exp_str = d["expected"] or "-"
+        status = {True: "\u2713", False: "\u2717"}.get(d["passed"], "-")
+        print(
+            pad(str(d["index"]), cols[0])
+            + pad(match_text, cols[1])
+            + pad(d["actual"], cols[2])
+            + pad(exp_str, cols[3])
+            + pad(status, cols[4])
+        )
 
     if expected:
-        print("-" * 60)
-        print(f"验证结果: {'✓ 全部通过' if all_pass else '✗ 存在失败'}")
+        print("-" * total_width)
+        verdict = "\u2713 全部通过" if all_pass else "\u2717 存在失败"
+        print(f"验证结果: {verdict}")
+
+    # 性能基准（多次运行时）
+    if len(durations) > 1:
+        print("\n" + "=" * 60)
+        print("性能基准测试")
+        print("=" * 60)
+        print(f"运行次数: {len(durations)}")
+        print(f"最短耗时: {format_duration(min(durations))}")
+        print(f"最长耗时: {format_duration(max(durations))}")
+        print(f"平均耗时: {format_duration(sum(durations) / len(durations))}")
+        median = sorted(durations)[len(durations) // 2]
+        print(f"中位数:   {format_duration(median)}")
 
     return all_pass
 
 
-def print_benchmark(durations_ms):
-    """打印性能基准测试结果"""
-    print("\n" + "=" * 60)
-    print("性能基准测试")
-    print("=" * 60)
-    print(f"运行次数: {len(durations_ms)}")
-    print(f"最短耗时: {format_duration(min(durations_ms))}")
-    print(f"最长耗时: {format_duration(max(durations_ms))}")
-    print(f"平均耗时: {format_duration(sum(durations_ms) / len(durations_ms))}")
-    if len(durations_ms) > 1:
-        sorted_d = sorted(durations_ms)
-        median = sorted_d[len(sorted_d) // 2]
-        print(f"中位数:   {format_duration(median)}")
+def output_json(data, output, durations, expected=None):
+    """JSON 格式输出，返回 all_pass"""
+    _, all_pass = check_expected(output.get("results", []), data["items"], expected)
+
+    result = {
+        "input": data,
+        "output": output,
+        "duration_ms": durations[0] if len(durations) == 1 else durations,
+    }
+
+    if len(durations) > 1:
+        result["stats"] = {
+            "runs": len(durations),
+            "min_ms": min(durations),
+            "max_ms": max(durations),
+            "avg_ms": sum(durations) / len(durations),
+        }
+
+    if expected:
+        result["expected"] = expected
+        result["all_pass"] = all_pass
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return all_pass
 
 
-def main():
+# ---------------------------------------------------------------------------
+# 参数解析 & 入口
+# ---------------------------------------------------------------------------
+
+
+def parse_args():
     parser = argparse.ArgumentParser(
         description="HaE Validator 测试数据生成器与运行器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -164,7 +300,6 @@ def main():
     )
     parser.add_argument("--line", type=int, default=1, help="起始行号 (file模式)")
     parser.add_argument("--column", type=int, default=1, help="列号 (file模式)")
-
     parser.add_argument("-v", "--validator", metavar="PATH", help="验证器脚本路径")
     parser.add_argument(
         "-e",
@@ -189,74 +324,29 @@ def main():
         help="验证器超时时间，单位秒 (默认: 60)",
     )
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出结果")
+    return parser.parse_args()
 
-    args = parser.parse_args()
 
-    data = {
-        "rule": {"name": args.rule_name, "regex": args.regex, "group": args.group},
-        "items": [
-            build_item(i, m, args.format, args) for i, m in enumerate(args.matches)
-        ],
-    }
+def main():
+    args = parse_args()
+    data = build_test_data(args)
 
-    # 如果没有指定验证器，仅输出生成的测试数据
+    # 管道模式：仅输出测试数据
     if not args.validator:
         print(json.dumps(data, ensure_ascii=False, indent=2))
         return
 
     # 运行验证器
-    durations = []
-    last_output = None
-
-    for i in range(args.runs):
-        start = time.perf_counter()
-        output, error = run_validator(args.validator, data, timeout=args.timeout)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-
-        if error:
-            print(f"错误: {error}", file=sys.stderr)
-            sys.exit(1)
-
-        durations.append(elapsed_ms)
-        last_output = output
-
-        if args.runs > 1:
-            print(f"\r运行进度: {i + 1}/{args.runs}", end="", flush=True)
-
-    if args.runs > 1:
-        print()  # 换行
+    output, durations = run_benchmark(args.validator, data, args.runs, args.timeout)
 
     # 输出结果
     if args.json:
-        result = {
-            "input": data,
-            "output": last_output,
-            "duration_ms": durations[0] if len(durations) == 1 else durations,
-            "stats": {
-                "runs": len(durations),
-                "min_ms": min(durations),
-                "max_ms": max(durations),
-                "avg_ms": sum(durations) / len(durations),
-            }
-            if len(durations) > 1
-            else None,
-        }
-        if args.expected:
-            result["expected"] = args.expected
-            result["all_pass"] = all(
-                r.get("tags") == args.expected[r.get("index")]
-                for r in last_output.get("results", [])
-                if r.get("index", 0) < len(args.expected)
-            )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        all_pass = output_json(data, output, durations, args.expected)
     else:
-        all_pass = print_results(data, last_output, durations[0], args.expected)
-        if len(durations) > 1:
-            print_benchmark(durations)
+        all_pass = output_text(data, output, durations, args.expected)
 
-        # 如果有期望结果且验证失败，返回非零退出码
-        if args.expected and not all_pass:
-            sys.exit(1)
+    if args.expected and not all_pass:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
