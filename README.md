@@ -109,7 +109,8 @@ Validators communicate with HaE via **stdin/stdout** using JSON:
 | [Email](validator/Email.py) | Validates email via SMTP RCPT TO (high), MX record (medium), filters test/static patterns |
 | [OSSAccessKey](validator/OSSAccessKey.py) | Cross-validates Alibaba Cloud OSS AccessKey pairs (AK/SK) via API |
 | [OpenAIProvider](validator/OpenAIProvider.py) | AI-powered sensitive data analysis using OpenAI-compatible API |
-| [OpenAIPrivacyFilter](validator/OpenAIPrivacyFilter.py) | Privacy detection using [OpenAI Privacy Filter](https://github.com/openai/openai-privacy-filter) model |
+| [OpenAIPrivacyFilter](validator/OpenAIPrivacyFilter.py) | Privacy detection via [OPF HTTP API](https://github.com/gh0stkey/opf-privacy-filter) (server mode, requires running OPF service) |
+| [OpenAIPrivacyFilterLocal](validator/OpenAIPrivacyFilterLocal.py) | Privacy detection using [OpenAI Privacy Filter](https://github.com/openai/openai-privacy-filter) model locally (requires `opf` package installed) |
 
 ## Tester
 
