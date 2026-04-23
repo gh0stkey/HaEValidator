@@ -1,87 +1,94 @@
+#!/usr/bin/env python3
+
 import json
 import sys
 
 from openai import OpenAI
 
-PROMPT = """你是网络安全和数据安全分析专家,负责基于正则匹配结果及上下文,研判数据的敏感程度与可利用性。请严格遵循以下规则执行任务:
+PROMPT = """You are a cybersecurity and data security analysis expert, responsible for determining the sensitivity and exploitability of data based on regular expression matching results and context. Please strictly follow the following rules to perform the task:
 
-### 核心目标
-精准判定每条目标数据的敏感等级,输出JSON数组。
+### Core Objective
 
-### 分级标准(优先级:规则定义＞主观判断)
-1. **high等级**:需同时满足「正则匹配命中」+「上下文验证为真实敏感/可利用数据」
-   - 数据内容符合规则定义的格式要求
-   - 上下文表明这是真实的、未脱敏的敏感信息
-   - 数据具有实际可利用价值(如密钥、凭证、认证信息等)
+Accurately determine the sensitivity level of each target data item and output a JSON array.
 
-2. **medium等级**:满足「正则匹配命中」+「上下文无法完全验证真实性,但存在敏感特征」
-   - 数据格式符合规则要求,但部分脱敏或模糊化
-   - 上下文暗示可能是敏感信息,但缺乏明确证据
-   - 数据真实性存疑,但不能完全排除风险
+### Grading Criteria (Priority: Rule Definition > Subjective Judgment)
 
-3. **low等级**:满足「正则匹配命中」+「上下文验证为误报,但存在潜在风险」
-   - 数据符合正则格式,但上下文表明是测试/示例/占位数据
-   - 公开的、已脱敏的或无实际价值的信息
-   - 规则弱关联的字符串(仅在描述性文本中出现)
+1. **high level**: Must meet both "Regular expression match" + "Context verification as real sensitive/usable data"
+- Data content meets the format requirements defined by the rules
+- Context indicates that this is real, unmasked sensitive information
+- Data has actual exploitability value (such as keys, credentials, authentication information, etc.)
 
-4. **none等级**:满足「正则匹配未命中」或「上下文验证为明确误报/无关联」
-   - 占位符或模板文本
-   - 规则说明、提示性文本
-   - 与规则目标完全无关的普通字符串
+2. **medium level**: Satisfy "Regular expression match" + "Context cannot fully verify the authenticity, but there are sensitive features"
+- Data format meets the rule requirements, but partially masked or blurred
+- Context suggests that it may be sensitive information, but lacks clear evidence
+- Data authenticity is questionable, but cannot be completely ruled out as a risk
 
-### 执行步骤
-1. 第一步:理解规则的目标类型(基于规则名、正则表达式、分组信息)
-2. 第二步:逐条校验匹配内容是否符合规则定义的格式特征
-3. 第三步:结合上下文(前文+后文)验证数据的真实性与可利用性
-4. 第四步:对照分级标准判定敏感等级,优先匹配高等级规则
-5. 第五步:按指定格式输出JSON数组
+3. **low level**: Satisfy "Regular expression match" + "Context verification as false positive, but there is potential risk"
+- Data meets the regular expression format, but context indicates it is test/sample/placeholder data
+- Public, masked, or information without actual value
+- Weakly associated strings (only appear in descriptive text)
 
-### 输出要求
-严格遵守如下格式并且只能返回JSON数组,每个元素包含index和tags字段,无任何多余内容。示例:
+4. **none level**: Satisfy "Regular expression does not match" or "Context verification as clear false positive/no relevance"
+- Placeholder or template text
+- Rule descriptions, prompt text
+- Ordinary strings completely unrelated to the rule objective
+
+### Execution Steps
+
+1. First step: Understand the target type of the rules (based on rule name, regular expression, grouping information)
+2. Second step: Check each matched content to see if it meets the format features defined by the rules
+3. Third step: Verify the authenticity and exploitability of the data in conjunction with the context (previous text + following text)
+4. Fourth step: Determine the sensitivity level according to the grading criteria, prioritizing high-level rules
+5. Fifth step: Output in the specified format
+
+### Output Requirements
+
+Strictly adhere to the following format and only return a JSON array, with each element containing the index and tags fields, with no additional content. Example:
+
 [{"index":0,"tags":"high"},{"index":1,"tags":"none"}]
 """
 
 RULE_SPECIFIC_PROMPTS = {
     "Cloud Key": """
-### 规则专项指引：Cloud Key（云服务密钥）
-- 目标：识别云厂商（AWS、阿里云、腾讯云、华为云等）的 AccessKeyId / AccessKeySecret
-- high：符合云厂商密钥格式（如 AKIA...、LTAI...），且上下文无明显测试/示例标记
-- medium：格式匹配但变量名含 example/test/demo，或密钥被部分遮掩
-- low：仅出现 access_key_id 等字段名，值为空或明确为占位符（xxx、your-key-here）
-- none：SDK 文档说明文本、注释中的字段名引用、与密钥无关的普通字符串
+### Rule Special Guidance: Cloud Key (Cloud Service Key)
+- Objective: Identify the AccessKeyId / AccessKeySecret of cloud vendors (AWS, Alibaba Cloud, Tencent Cloud, Huawei Cloud, etc.)
+- High: Matches the cloud vendor key format (such as AKIA..., LTAI...) and has no obvious test/example markings in the context.
+- Medium: Format matches but variable names contain example/test/demo, or the key is partially obscured.
+- Low: Only the field names such as access_key_id appear, with empty values or explicitly marked as placeholders (xxx, your-key-here).
+- None: SDK documentation text, field name references in comments, and general strings unrelated to the key.
 """,
     "Password Field": """
-### 规则专项指引：Password Field（密码字段）
-- 目标：识别键值对形式的密码泄露，如 password="abc123"、passwd: "xxx"
-- high：字段名含 pass/pwd/passwd/password 且值为非空的具体字符串，上下文为配置文件、API响应、日志
-- medium：值看起来像真实密码但上下文不明确，或值为弱密码（123456、admin等）无法确认是否为生产环境
-- low：值为明显的占位符（*****、${password}、<your_password>）、单元测试数据、前端表单校验逻辑
-- none：仅出现字段名定义（如 HTML label、schema 描述）、值为空字符串、密码强度校验规则文本
+### Rule Special Guidance: Password Field (Password Field)
+- Objective: Identify password leaks in key-value pair format, such as password="abc123", passwd: "xxx"
+- High: Field names containing pass/pwd/passwd/password and non-empty specific string values, context includes configuration files, API responses, logs
+- Medium: Values appear to be real passwords but the context is unclear, or values are weak passwords (123456, admin, etc.) and it cannot be confirmed whether they are in a production environment
+- Low: Values are obvious placeholders (*****, ${password}, <your_password>), unit test data, frontend form validation logic
+- None: Only field name definitions appear (such as HTML label, schema description), values are empty strings, password strength verification rule text
 """,
     "Username Field": """
-### 规则专项指引：Username Field（用户名字段）
-- 目标：识别键值对形式的用户名/账号泄露
-- high：字段名含 user/username/account 且值为具体用户名（如 admin、zhangsan、test_user），上下文为配置/响应/日志
-- medium：值为非特定人名但可能是用户标识（如纯数字 ID），上下文不明确
-- low：值为通用占位符（user1、testuser）、文档示例中的演示账号
-- none：字段定义（schema/model）中的属性名、HTML 表单 label、createdBy/updatedBy 等审计字段中的系统用户名
+### Special Guidance: Username Field (Username Field)
+- Objective: Identify username/account leaks in key-value pair form
+- High: Field names containing user/username/account and values being specific usernames (e.g., admin, zhangsan, test_user), context being configuration/response/log
+- Medium: Values being non-specific personal names but possibly user identifiers (e.g., numeric ID), context unclear
+- Low: Values being generic placeholders (user1, testuser), demonstration accounts in documentation examples
+- None: Attribute names in field definitions (schema/model), HTML form labels, and system usernames in audit fields such as createdBy/updatedBy
 """,
     "Sensitive Field": """
-### 规则专项指引：Sensitive Field（敏感字段，含 key/secret/token/auth/access/admin/ticket）
-- 目标：识别通用敏感字段的键值对泄露
-- high：字段名含 secret/token/auth 等关键词，值为高熵随机字符串（长度>16，含大小写+数字），上下文为配置或 API 响应
-- medium：值为中等熵值字符串，或字段名匹配但值可能是非敏感的配置项（如 config_key="theme"）
-- low：值为 null/空/占位符/前端常量名（如 accessToken: "ACCESS_TOKEN"）
-- none：前端 i18n 文本、UI 配置（如 admin="管理员"）、字段仅用于路由/权限判断的布尔值
-注意：区分「认证凭证类」（secret/token/auth → 倾向高等级）和「功能配置类」（config/admin/ticket → 需更多上下文）
+### Rule Special Guidance: Sensitive Field (Sensitive Field, including key/secret/token/auth/access/admin/ticket)
+- Objective: Identify the leakage of key-value pairs of general sensitive fields
+- High: Field names contain keywords such as secret/token/auth, and the values are high-entropy random strings (length > 16, containing uppercase and numbers), with context being configuration or API response
+- Medium: Values are strings with medium entropy, or field names match but the values may be non-sensitive configuration items (e.g., config_key="theme")
+- Low: Values are null/empty/placeholders/frontend constant names (e.g., accessToken: "ACCESS_TOKEN")
+- None: Front-end i18n text, UI configuration (e.g., admin="Administrator"), boolean fields used only for routing/permission judgment
+Note: Distinguish between "authentication credentials" (secret/token/auth → tend to be high-level) and "functional configuration" (config/admin/ticket → require more context)
 """,
     "Mobile Number Field": """
-### 规则专项指引：Mobile Number Field（手机号字段）
-- 目标：识别键值对形式的手机号泄露
-- high：字段名含 mobile/phone 且值为完整的 11 位手机号，上下文为 API 响应/数据库导出/日志
-- medium：手机号可能被部分脱敏（如 138****1234）但脱敏不完整，或出现在批量数据中
-- low：值为明显的测试号码（13800138000）、值不符合手机号格式
-- none：字段定义/schema 中的属性名、表单 placeholder 文本
+### Rule Special Guidance: Mobile Number Field (Mobile Number Field)
+- Objective: Identify mobile number leaks in key-value pair form
+- High: Field name contains "mobile" or "phone" and the value is a complete 11-digit mobile number, with context being API response/database export/log
+- Medium: The mobile number may be partially masked (e.g., 138****1234) but the masking is incomplete, or it appears in batch data
+- Low: The value is an obvious test number (13800138000) or the value does not conform to the mobile number format
+- None: Field name in field definition/schema, or placeholder text in forms
 """,
 }
 
@@ -93,32 +100,31 @@ def build_content(rule, items):
     specific_prompt = RULE_SPECIFIC_PROMPTS.get(rule_name, "")
 
     lines = [
-        f"规则名：{rule_name}，"
-        f"规则正则：{rule.get('regex', '')}，"
-        f"规则分组：{rule.get('group', '')}",
+        f"Rule Name:{rule_name}，"
+        f"Rule Regex:{rule.get('regex', '')}，"
+        f"Rule Group:{rule.get('group', '')}",
     ]
 
-    # 动态Prompt增强
+    # Dynamic Prompt
     if specific_prompt:
         lines.append(specific_prompt)
 
     lines.append("")
-    lines.append("以下是需要研判的数据列表：")
+    lines.append("Here is the list of data that needs to be analyzed:")
 
     for item in items:
         idx = item.get("index", 0)
         data = item.get("data", {})
         ctx = data.get("context", {})
         lines.append(
-            f"[{idx}] 匹配内容：{data.get('match', '')}，"
-            f"上文：{ctx.get('before', '')}，"
-            f"下文：{ctx.get('after', '')}"
+            f"[{idx}] Match content：{data.get('match', '')}，"
+            f"Previous Context text：{ctx.get('before', '')}，"
+            f"Next Context text：{ctx.get('after', '')}"
         )
     return "\n".join(lines)
 
 
 def parse_response(text, items):
-    # 提取返回文本中的JSON数组
     start = text.find("[")
     end = text.rfind("]")
     if start != -1 and end != -1:
@@ -141,7 +147,6 @@ def parse_response(text, items):
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # 解析失败，全部降级为 none
     return [{"index": item.get("index", 0), "tags": "none"} for item in items]
 
 
@@ -151,13 +156,13 @@ def main():
     items = input_data.get("items", [])
 
     client = OpenAI(
-        api_key="",  # 修改API Key
+        api_key="",  # API Key
         base_url="http://localhost:1234/v1",
     )
 
     content = build_content(rule, items)
     response = client.chat.completions.create(
-        model="",  # 修改模型ID
+        model="",  # Model ID
         max_tokens=4096,
         messages=[{"role": "user", "content": f"{PROMPT}\n\n{content}"}],
     )
