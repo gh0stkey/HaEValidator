@@ -25,9 +25,9 @@ def highest_severity(*severities):
     return max(severities, key=lambda s: SEVERITY_RANK.get(s, 0))
 
 
-def redact_batch(texts):
-    url = f"{OPF_SERVER_URL.rstrip('/')}/redact/batch"
-    payload = json.dumps({"texts": texts}).encode("utf-8")
+def redact(text):
+    url = f"{OPF_SERVER_URL.rstrip('/')}/redact"
+    payload = json.dumps({"text": text}).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=payload,
@@ -54,16 +54,11 @@ def main():
         print(json.dumps({"results": []}))
         return
 
-    indices = []
-    texts = []
-    for item in items:
-        indices.append(item.get("index", 0))
-        texts.append(item.get("data", {}).get("match", ""))
-
-    batch_resp = redact_batch(texts)
-
     results = []
-    for idx, redact_result in zip(indices, batch_resp.get("results", [])):
+    for item in items:
+        idx = item.get("index", 0)
+        text = item.get("data", {}).get("match", "")
+        redact_result = redact(text)
         tags = severity_from_spans(redact_result.get("detected_spans", []))
         results.append({"index": idx, "tags": tags})
 
